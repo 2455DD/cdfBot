@@ -11,15 +11,46 @@ from graia.ariadne.message.chain import MessageChain
 from graia.ariadne.model import Group
 from graia.broadcast import Broadcast
 from graia.saya import Saya
+from launart import Launart,Launchable
+import kayaku
+
+class ConfigService(Launchable):
+    id = "bot.config"
+
+    @property
+    def required(self):
+        return set()
+
+    @property
+    def stages(self):
+        return {"preparing", "cleanup"}
+
+    async def launch(self, _mgr: Launart):
+        async with self.stage("preparing"):
+            # 在 preparing 阶段预加载模型并写入 JSON Schema
+            kayaku.bootstrap()
+
+        async with self.stage("cleanup"):
+            # 在 cleanup 阶段写入所有模型
+            kayaku.save_all()
 
 
 def main():
     bcc = create(Broadcast)
-
     saya = create(Saya)
+    mgr = Launart()
+    
+    kayaku.initialize({
+        "{**}":"./config/{**}",
+        "{**}.credential":"./secrets/credential.jsonc:{**}"
+    })
+    
+    mgr.add_service(ConfigService())
+    
     app = Ariadne(
         connection=config(
-            1
+            1,
+            launch_manager=mgr
         )
     )
 
