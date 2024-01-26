@@ -1,0 +1,21 @@
+{
+    /*
+    *   指向图片SQLlite数据库的路径，若不存在会自动创建
+    *   用`~`指代用户目录
+    * @type: str
+    */
+    "db_path":"~/.config/",
+
+    /*
+    *   指向图片SQLlite数据库的路径，若不存在会自动创建
+    *   用`~`指代用户目录
+    * @type: str
+    */
+    "data_path":"",
+    
+    /*
+    *
+    * @type: str
+    */
+    "img_name_format":""
+}

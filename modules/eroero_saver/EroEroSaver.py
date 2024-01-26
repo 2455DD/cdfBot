@@ -5,8 +5,6 @@ from graia.ariadne.message.element import Image
 from graia.ariadne.model import Group
 from graia.saya import Channel
 from graia.saya.builtins.broadcast.schema import ListenerSchema
-from kayaku import config
-from pathlib import Path
 
 from modules.access_control.access_control import check_group,check_member
 
@@ -15,7 +13,6 @@ channel.name("EroEroSaver")
 channel.description("存储指定群组的瑟图和视频")
 channel.author("Cannedfish")
 
-@config("data.")
 
 
 #TODO: introducing kayaku module config

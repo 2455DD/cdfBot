@@ -34,7 +34,7 @@ class ConfigService(Launchable):
             # 在 cleanup 阶段写入所有模型
             kayaku.save_all()
 
-
+# TODO: kayaku initialization
 def main():
     bcc = create(Broadcast)
     saya = create(Saya)
