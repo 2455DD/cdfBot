@@ -11,11 +11,15 @@
     *   用`~`指代用户目录
     * @type: str
     */
-    "data_path":"",
+    "data_path":"~/data/cdfbot/eroero_saver/db/img.db",
     
     /*
-    *
+    *   文件(图片)命名方案，自己按照Template string相关规范来写(PEP 292)。
+    *   目前支持的命名占位符有:
+    *   $md5  : MD5
+    *   $hash : 图片P-Hash
+    *   $ext  : File Extention
     * @type: str
     */
-    "img_name_format":""
+    "img_name_format":"${hash}.${ext}"
 }
