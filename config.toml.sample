@@ -1,0 +1,3 @@
+[bot]
+plugin_dirs = ["plugins"]
+adapters = ["alicebot.adapter.cqhttp"]
