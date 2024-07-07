@@ -1,3 +1,7 @@
 [bot]
 plugin_dirs = ["plugins"]
 adapters = ["alicebot.adapter.cqhttp"]
+
+[plugins.media_parser]
+db_path = ""
+download_root_path = ""
