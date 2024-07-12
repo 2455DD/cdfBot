@@ -30,8 +30,17 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
         conn = sqlite3.connect(self.config.db_path,timeout=5)
         return conn
     
-    
-    
+    async def _save_metadata_to_db(self,path:str,type:str):
+        assert os.path.exists(path)
+        match type:
+            case "image":
+                image_hash = str(imagehash.crop_resistant_hash(Image.open(path), min_segment_size=500, segmentation_image_size=1000))
+                pass
+            case "video":
+                pass
+            case "_":
+                raise ValueError(f"{type} 不被支持")
+            
     async def _handle_multimedia_segment(self,seg:CQHTTPMessageSegment):
         
         # TODO: 数据库处理
