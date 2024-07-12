@@ -1,3 +1,4 @@
+import os
 from alicebot import Plugin,ConfigModel
 from alicebot.event import MessageEvent
 from alicebot.adapter.cqhttp import CQHTTPMessage,CQHTTPMessageSegment
@@ -6,6 +7,8 @@ from structlog.stdlib import get_logger
 import sqlite3
 import aiohttp
 import aiofiles
+from PIL import Image
+import imagehash
 
 logger = get_logger()
 
@@ -28,6 +31,7 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
         return conn
     
     
+    
     async def _handle_multimedia_segment(self,seg:CQHTTPMessageSegment):
         
         # TODO: 数据库处理
@@ -42,6 +46,8 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
         else:
             raise ValueError(f"该方法不处理{seg.type}")
         
+        
+        
         file_name = self.config.download_root_path + f"/{seg.type}/{seg['file']}"
         async with aiohttp.ClientSession() as session:
             async with session.get(url) as resp:
@@ -49,7 +55,10 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
                     async with aiofiles.open(file_name,mode="wb") as f:
                         f.write(await resp.read())
                         
-                
+        
+        match seg.type:
+            case "image":
+                hash = await imagehash.crop_resistant_hash(Image.open(file_name),min_segment_size=500, segmentation_image_size=1000)
         
     
     async def handle(self) -> None:
