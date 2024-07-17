@@ -77,7 +77,7 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
                 orginal_hash = imagehash.whash(Image.open(file_name))
                 hash = str(orginal_hash)
             case "video":
-                hash = str(videohash.VideoHash(url=url)) #TODO
+                hash = str(videohash.VideoHash(file_name)) #TODO
             case "file":
                 hash = None #TODO: 实现文件形式内容
             case "_":
