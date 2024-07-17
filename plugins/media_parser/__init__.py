@@ -59,8 +59,6 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
         else:
             raise ValueError(f"该方法不处理{seg.type}")
         
-        
-        
         file_name = f"{self.config.download_root_path}/{seg.type}/{seg['file']}"
         
         if not os.path.exists(self.config.download_root_path):
