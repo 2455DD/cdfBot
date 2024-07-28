@@ -107,9 +107,6 @@ class MediaParserSqlHelper():
             cur.close()
               
     def insert_video(self,video_name:str,video_hash:str):
-        data = (
-            {"name":video_name,"hash":video_hash},
-        )
         try:
             cur = self.conn.cursor()
             cur.execute('''
