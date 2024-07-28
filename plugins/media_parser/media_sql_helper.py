@@ -82,10 +82,35 @@ class MediaParserSqlHelper():
             GROUP BY
                 Video.id;
             ''')
+        conn.autocommit = False
         self.conn = conn
     
-    def _connect_(self):
-        #TODO: 设计_connect_db，抽象负责与数据库的连接
+    #---------------- Insert -------------------------
+    def insert_image(self,image_name:str,image_hash:str) :
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute('''
+                            INSERT INTO Image(file_name,hash)
+                            VALUE (:name,:hash)
+                            ''',{"name":image_name,"hash":image_hash})
+        except sqlite3.OperationalError as err:
+            self.conn.rollback()
+            raise err
+        else:
+            self.conn.commit()    
+    
+    def insert_video(self,video_name:str,video_hash:str):
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute('''
+                            INSERT INTO Image(file_name,hash)
+                            VALUE (:name,:hash)
+                            ''',{"name":video_name,"hash":video_hash})
+        except sqlite3.OperationalError as err:
+            self.conn.rollback()
+            raise err
+        else:
+            self.conn.commit() 
         pass
     
 if __name__ == "__main__":
