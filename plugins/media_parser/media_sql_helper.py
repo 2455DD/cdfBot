@@ -190,6 +190,33 @@ class MediaParserSqlHelper():
         finally:
             cur.close()
             
+    #-------------- 删除------------------
+    def delete_image_record(self,image_hash:str)->str:
+        try:
+            cur = self.conn.cursor()
+            cur.execute('''
+                        DELETE FROM Image WHERE Image.hash = ?
+                        ''',(image_hash,))
+            self.conn.commit()
+        except sqlite3.OperationalError as err:
+            self.conn.rollback()
+            raise err
+        finally:
+            cur.close()
+    
+    def delete_video_record(self,video_hash:str):
+        try:
+            cur = self.conn.cursor()
+            cur.execute('''
+                        DELETE FROM Video WHERE Video.hash = ?
+                        ''',(video_hash,))
+            self.conn.commit()
+        except sqlite3.OperationalError as err:
+            self.conn.rollback()
+            raise err
+        finally:
+            cur.close()
+            
     
 if __name__ == "__main__":
     MediaParserSqlHelper("./.develop_assets/media.db")
