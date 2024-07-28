@@ -74,12 +74,10 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
         try:
             if seg.type == "image":
                 url = seg["url"]
-                logger.debug(url)
                 await self._save_file(file_path,url)
                 
             elif seg.type == "video":
                 url = seg["url"]
-                logger.debug(url)     
                 await self._save_file(file_path,url)
             elif seg.type == "file":
                 raise NotImplementedError("文件形式的消息暂不允许") #TODO: 实现文件形式内容
@@ -99,13 +97,21 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                 orginal_hash = imagehash.whash(Image.open(file_path))
                 hash = str(orginal_hash)
                 if self.state.is_image_exists(hash):
-                    logger.info(f"图片{seg['file']}存在重复，当前不会自动删除，请手动删除")
+                    if Path(self.state.get_image_path_by_hash(hash)).exists():
+                        logger.info(f"图片{seg['file']}存在重复，当前不会自动删除，请手动删除")
+                    else:
+                        self.state.delete_image_record(hash)
+                        self.state.insert_image(seg["file"],hash,file_path)
                 else:
                     self.state.insert_image(seg["file"],hash,file_path)
             case "video":
                 hash = str(videohash.VideoHash(path = file_path)) #TODO
                 if self.state.is_video_exists(hash):
-                    logger.info(f"视频{seg['file']}存在重复，当前不会自动删除，请手动删除")
+                    if Path(self.state.get_video_path_by_hash(hash)):
+                        logger.info(f"视频{seg['file']}存在重复，当前不会自动删除，请手动删除")
+                    else:
+                        self.state.delete_image_record(hash)
+                        self.state.insert_video(seg["file"],hash,file_path)
                 else:
                     self.state.insert_video(seg["file"],hash,file_path)
             case "file":
