@@ -11,6 +11,8 @@ from PIL import Image
 import imagehash
 import videohash
 import shutil
+from .media_sql_helper import MediaParserSqlHelper
+from pathlib import Path
 
 logger = get_logger()
 
@@ -19,7 +21,7 @@ class MediaParserConfig(ConfigModel):
     db_path:str = "db/media.db"
     download_root_path:str = "assets/downloads"
 
-class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
+class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
     """MediaParser
 
     解析并存储视频和图片
@@ -29,12 +31,19 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
     """
     priority = 2
     def __init_state__(self) -> sqlite3.Connection | None:
-        if not os.path.exists(self.config.db_path):
-            logger.error("数据库无法打开，跳过链接")
-            return
+        db_path = Path(self.config.db_path)
+        try:
+            if not db_path.parent.exists():
+                logger.warning(f"媒体数据库父目录{db_path.parent.absolute()}不存在，尝试创建")
+                db_path.parent.mkdir(parents=True)
+            if not db_path.exists():
+                logger.warning(f"媒体数据库{db_path}不存在，尝试创建")
+                db_path.open("w").close()
+        except OSError as err:
+            logger.error(err)
+            return None
         else:    
-            conn = sqlite3.connect(self.config.db_path,timeout=5)
-        return conn
+            return MediaParserSqlHelper(self.config.db_path)
     
     async def _save_metadata_to_db(self,path:str,type:str):
         assert os.path.exists(path)
@@ -65,12 +74,10 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
         try:
             if seg.type == "image":
                 url = seg["url"]
-                logger.debug(url)
                 await self._save_file(file_path,url)
                 
             elif seg.type == "video":
                 url = seg["url"]
-                logger.debug(url)     
                 await self._save_file(file_path,url)
             elif seg.type == "file":
                 raise NotImplementedError("文件形式的消息暂不允许") #TODO: 实现文件形式内容
@@ -89,8 +96,24 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
             case "image":
                 orginal_hash = imagehash.whash(Image.open(file_path))
                 hash = str(orginal_hash)
+                if self.state.is_image_exists(hash):
+                    if Path(self.state.get_image_path_by_hash(hash)).exists():
+                        logger.info(f"图片{seg['file']}存在重复，当前不会自动删除，请手动删除")
+                    else:
+                        self.state.delete_image_record(hash)
+                        self.state.insert_image(seg["file"],hash,file_path)
+                else:
+                    self.state.insert_image(seg["file"],hash,file_path)
             case "video":
                 hash = str(videohash.VideoHash(path = file_path)) #TODO
+                if self.state.is_video_exists(hash):
+                    if Path(self.state.get_video_path_by_hash(hash)):
+                        logger.info(f"视频{seg['file']}存在重复，当前不会自动删除，请手动删除")
+                    else:
+                        self.state.delete_image_record(hash)
+                        self.state.insert_video(seg["file"],hash,file_path)
+                else:
+                    self.state.insert_video(seg["file"],hash,file_path)
             case "file":
                 hash = None #TODO: 实现文件形式内容
             case "_":
