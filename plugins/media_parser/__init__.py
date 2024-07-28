@@ -104,6 +104,10 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                     self.state.insert_image(seg["file"],hash,file_path)
             case "video":
                 hash = str(videohash.VideoHash(path = file_path)) #TODO
+                if self.state.is_video_exists(hash):
+                    logger.info(f"视频{seg['file']}存在重复，当前不会自动删除，请手动删除")
+                else:
+                    self.state.insert_video(seg["file"],hash,file_path)
             case "file":
                 hash = None #TODO: 实现文件形式内容
             case "_":
