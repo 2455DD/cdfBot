@@ -10,6 +10,7 @@ import aiofiles
 from PIL import Image
 import imagehash
 import videohash
+import shutil
 
 logger = get_logger()
 
@@ -45,43 +46,57 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
                 pass
             case "_":
                 raise ValueError(f"{type} 不被支持")
+    
+    async def _save_file(self,path:str,url:str):
+        async with aiofiles.open(path,mode="wb") as f:        
+            async with httpx.AsyncClient() as client:
+                async with client.stream("get",url) as resp:
+                    resp.raise_for_status()
+                    async for chuck in resp.aiter_bytes():
+                            await f.write(chuck)        
             
     async def _handle_multimedia_segment(self,seg:CQHTTPMessageSegment):
-        # TODO: 数据库处理
-        if seg.type == "image":
-            url = seg["url"]
-        elif seg.type == "video":
-            url = seg["url"]
-        elif seg.type == "file":
-            raise NotImplementedError("文件形式的消息暂不允许") #TODO: 实现文件形式内容
-        elif seg.type == "text":
-            return
-        else:
-            raise ValueError(f"该方法不处理{seg.type}")
-        
-        file_name = f"{self.config.download_root_path}/{seg.type}/{seg['file']}"
+        file_path = f"{self.config.download_root_path}/{seg.type}/{seg['file']}"
         
         if not os.path.exists(self.config.download_root_path):
             os.makedirs(self.config.download_root_path)
         
-        async with httpx.AsyncClient() as client:
-            resp = await client.get(url)
-            if resp.status_code == 200:
-                async with aiofiles.open(file_name,mode="wb") as f:
-                    await f.write(await resp.aread())
-        
+        # TODO: 数据库处理
+        try:
+            if seg.type == "image":
+                url = seg["url"]
+                logger.debug(url)
+                await self._save_file(file_path,url)
+                
+            elif seg.type == "video":
+                url = seg["url"]
+                logger.debug(url)     
+                await self._save_file(file_path,url)
+            elif seg.type == "file":
+                raise NotImplementedError("文件形式的消息暂不允许") #TODO: 实现文件形式内容
+            elif seg.type == "text":
+                return
+            else:
+                raise ValueError(f"该方法不处理{seg.type}")
+        except httpx.HTTPStatusError as e:
+            logger.error(f"{seg['file']} 无法访问：{seg['url']} \n{e}")
+            return
+        except Exception as e:
+            logger.error(f"{seg['file']} 出错： \n{e}")
+            return
+          
         match seg.type:
             case "image":
-                orginal_hash = imagehash.whash(Image.open(file_name))
+                orginal_hash = imagehash.whash(Image.open(file_path))
                 hash = str(orginal_hash)
             case "video":
-                hash = str(videohash.VideoHash(file_name)) #TODO
+                hash = str(videohash.VideoHash(path = file_path)) #TODO
             case "file":
                 hash = None #TODO: 实现文件形式内容
             case "_":
                 raise ValueError(f"{type} 不被支持")
 
-        logger.debug(hash)
+        logger.debug(f"{seg.type}: \t{hash}")
         
     
     async def parse_forward_msgs(self,forward_msg:CQHTTPMessage) ->  List[CQHTTPMessageSegment]:
@@ -132,7 +147,9 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
                     try:
                         await self._handle_multimedia_segment(node_seg)
                     except NotImplementedError:
-                        logger.info()
+                        logger.warn("方法未实现")
+                    except Exception as e:
+                        logger.error(f"{node_seg["file"]}出现错误，跳过\n{e}")
         
 
     async def rule(self) -> bool:
