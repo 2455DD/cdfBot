@@ -93,12 +93,11 @@ class MediaParserSqlHelper():
                             INSERT INTO Image(file_name,hash)
                             VALUE (:name,:hash)
                             ''',{"name":image_name,"hash":image_hash})
+                self.conn.commit() 
         except sqlite3.OperationalError as err:
             self.conn.rollback()
             raise err
-        else:
-            self.conn.commit()    
-    
+              
     def insert_video(self,video_name:str,video_hash:str):
         try:
             with self.conn.cursor() as cur:
@@ -106,12 +105,43 @@ class MediaParserSqlHelper():
                             INSERT INTO Image(file_name,hash)
                             VALUE (:name,:hash)
                             ''',{"name":video_name,"hash":video_hash})
+                self.conn.commit() 
         except sqlite3.OperationalError as err:
             self.conn.rollback()
             raise err
-        else:
-            self.conn.commit() 
-        pass
+            
+    #---------------- Query ------------------------
+  
+    def is_image_exists(self,image_hash:str)->bool:
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute('''
+                            SELECT 1 FROM Image WHERE Image.hash = '?' LIMIT 1;
+                            ''',(image_hash))
+                self.conn.commit()
+                if cur.fetchone() is not None:
+                    return True
+                else:
+                    return False  
+        except sqlite3.OperationalError as err:
+            self.conn.rollback()
+            raise err
+
+
+    def is_video_exists(self,video_hash:str)->bool:
+        try:
+            with self.conn.cursor() as cur:
+                cur.execute('''
+                            SELECT 1 FROM Video WHERE Video.hash = '?' LIMIT 1;
+                            ''',(video_hash))
+                self.conn.commit()
+                if cur.fetchone() is not None:
+                    return True
+                else:
+                    return False  
+        except sqlite3.OperationalError as err:
+            self.conn.rollback()
+            raise err
     
 if __name__ == "__main__":
     MediaParserSqlHelper("./.develop_assets/media.db")
