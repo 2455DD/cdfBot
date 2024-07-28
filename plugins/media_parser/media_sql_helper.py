@@ -91,13 +91,13 @@ class MediaParserSqlHelper():
         self.conn = conn
     
     #---------------- Insert -------------------------
-    def insert_image(self,image_name:str,image_hash:str) :
+    def insert_image(self,image_name:str,image_hash:str,image_path:str) :
         try:
             cur = self.conn.cursor()
             cur.execute('''
-                        INSERT INTO Image(file_name,hash)
-                        VALUES (?,?)
-                        ''',(image_name,image_hash))
+                        INSERT INTO Image(file_name,file_path,hash)
+                        VALUES (?,?,?)
+                        ''',(image_name,image_path,image_hash))
             self.conn.commit()
             logger.debug("成功插入")
         except sqlite3.OperationalError as err:
@@ -106,13 +106,13 @@ class MediaParserSqlHelper():
         finally:
             cur.close()
               
-    def insert_video(self,video_name:str,video_hash:str):
+    def insert_video(self,video_name:str,video_hash:str,video_path:str):
         try:
             cur = self.conn.cursor()
             cur.execute('''
-                        INSERT INTO Video(file_name,hash)
-                        VALUES (:name,:hash)
-                        ''',(video_name,video_hash))
+                        INSERT INTO Video(file_name,file_path,hash)
+                        VALUES (?,?,?)
+                        ''',(video_name,video_path,video_hash))
             self.conn.commit() 
         except sqlite3.OperationalError as err:
             self.conn.rollback()
