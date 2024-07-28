@@ -98,6 +98,10 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
             case "image":
                 orginal_hash = imagehash.whash(Image.open(file_path))
                 hash = str(orginal_hash)
+                if self.state.is_image_exists(hash):
+                    logger.info(f"图片{seg['file']}存在重复，当前不会自动删除，请手动删除")
+                else:
+                    self.state.insert_image(seg["file"],hash,file_path)
             case "video":
                 hash = str(videohash.VideoHash(path = file_path)) #TODO
             case "file":
