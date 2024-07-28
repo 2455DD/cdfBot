@@ -11,7 +11,7 @@ from PIL import Image
 import imagehash
 import videohash
 import shutil
-
+from .media_sql_helper import MediaParserSqlHelper
 logger = get_logger()
 
 class MediaParserConfig(ConfigModel):
@@ -19,7 +19,7 @@ class MediaParserConfig(ConfigModel):
     db_path:str = "db/media.db"
     download_root_path:str = "assets/downloads"
 
-class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
+class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
     """MediaParser
 
     解析并存储视频和图片
@@ -33,8 +33,7 @@ class MediaParser(Plugin[MessageEvent,sqlite3.Connection,MediaParserConfig]):
             logger.error("数据库无法打开，跳过链接")
             return
         else:    
-            conn = sqlite3.connect(self.config.db_path,timeout=5)
-        return conn
+            return MediaParserSqlHelper(self.config.db_path)
     
     async def _save_metadata_to_db(self,path:str,type:str):
         assert os.path.exists(path)
