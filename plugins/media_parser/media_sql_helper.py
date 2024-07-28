@@ -157,6 +157,39 @@ class MediaParserSqlHelper():
             raise err
         finally:
             cur.close()
+            
+    def get_image_path_by_hash(self,image_hash:str)->str:
+        logger.debug("成功查询")
+        try:
+            cur = self.conn.cursor()
+            cur.execute('''
+                        SELECT Image.file_path FROM Image WHERE Image.hash = ?
+                        ''',(image_hash,))
+            self.conn.commit()
+            result = cur.fetchone()
+            return result[0]
+        except sqlite3.OperationalError as err:
+            self.conn.rollback()
+            raise err
+        finally:
+            cur.close()
+
+
+    def get_video_path_by_hash(self,video_hash:str)->str:
+        try:
+            cur = self.conn.cursor()
+            cur.execute('''
+                        SELECT Video.file_path FROM Video WHERE Video.hash = ?
+                        ''',(video_hash,))
+            self.conn.commit()
+            result = cur.fetchone()
+            return result[0]
+        except sqlite3.OperationalError as err:
+            self.conn.rollback()
+            raise err
+        finally:
+            cur.close()
+            
     
 if __name__ == "__main__":
     MediaParserSqlHelper("./.develop_assets/media.db")
