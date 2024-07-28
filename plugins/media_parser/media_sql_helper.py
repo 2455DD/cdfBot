@@ -11,8 +11,6 @@ class MediaParserSqlHelper():
         self.init_db()
         
     def init_db(self):
-        #TODO: 设计init_db，负责判断数据库是否符合预期，否则创建数据库
-        
         conn = sqlite3.connect(self.db_path)
         
         conn.executescript('''
