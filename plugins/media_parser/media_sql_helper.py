@@ -1,6 +1,9 @@
 import sqlite3
 from typing import *
 from pathlib import Path
+from structlog.stdlib import get_logger
+
+logger = get_logger()
 
 class MediaParserSqlHelper():
     def __init__(self,db_path:str) -> None:
@@ -17,6 +20,7 @@ class MediaParserSqlHelper():
             CREATE TABLE IF NOT EXISTS "Image" (
             "id" INTEGER NOT NULL,
             "file_name" TEXT NOT NULL,
+            "file_path" TEXT NOT NULL,
             "hash" TEXT NOT NULL,
             PRIMARY KEY ("id")
             );
@@ -40,6 +44,7 @@ class MediaParserSqlHelper():
             CREATE TABLE  IF NOT EXISTS  "Video"(
             "id" integer NOT NULL PRIMARY KEY AUTOINCREMENT,
             "file_name" TEXT,
+            "file_path" TEXT NOT NULL,
             "hash" TEXT
             );
 
@@ -88,60 +93,73 @@ class MediaParserSqlHelper():
     #---------------- Insert -------------------------
     def insert_image(self,image_name:str,image_hash:str) :
         try:
-            with self.conn.cursor() as cur:
-                cur.execute('''
-                            INSERT INTO Image(file_name,hash)
-                            VALUE (:name,:hash)
-                            ''',{"name":image_name,"hash":image_hash})
-                self.conn.commit() 
+            cur = self.conn.cursor()
+            cur.execute('''
+                        INSERT INTO Image(file_name,hash)
+                        VALUES (?,?)
+                        ''',(image_name,image_hash))
+            self.conn.commit()
+            logger.debug("成功插入")
         except sqlite3.OperationalError as err:
             self.conn.rollback()
             raise err
+        finally:
+            cur.close()
               
     def insert_video(self,video_name:str,video_hash:str):
+        data = (
+            {"name":video_name,"hash":video_hash},
+        )
         try:
-            with self.conn.cursor() as cur:
-                cur.execute('''
-                            INSERT INTO Image(file_name,hash)
-                            VALUE (:name,:hash)
-                            ''',{"name":video_name,"hash":video_hash})
-                self.conn.commit() 
+            cur = self.conn.cursor()
+            cur.execute('''
+                        INSERT INTO Video(file_name,hash)
+                        VALUES (:name,:hash)
+                        ''',(video_name,video_hash))
+            self.conn.commit() 
         except sqlite3.OperationalError as err:
             self.conn.rollback()
             raise err
+        finally:
+            cur.close()
             
     #---------------- Query ------------------------
   
     def is_image_exists(self,image_hash:str)->bool:
+        logger.debug("成功查询")
         try:
-            with self.conn.cursor() as cur:
-                cur.execute('''
-                            SELECT 1 FROM Image WHERE Image.hash = '?' LIMIT 1;
-                            ''',(image_hash))
-                self.conn.commit()
-                if cur.fetchone() is not None:
-                    return True
-                else:
-                    return False  
+            cur = self.conn.cursor()
+            cur.execute('''
+                        SELECT 1 FROM Image WHERE Image.hash = ?
+                        ''',(image_hash,))
+            self.conn.commit()
+            if cur.fetchone() is not None:
+                return True
+            else:
+                return False  
         except sqlite3.OperationalError as err:
             self.conn.rollback()
             raise err
+        finally:
+            cur.close()
 
 
     def is_video_exists(self,video_hash:str)->bool:
         try:
-            with self.conn.cursor() as cur:
-                cur.execute('''
-                            SELECT 1 FROM Video WHERE Video.hash = '?' LIMIT 1;
-                            ''',(video_hash))
-                self.conn.commit()
-                if cur.fetchone() is not None:
-                    return True
-                else:
-                    return False  
+            cur = self.conn.cursor()
+            cur.execute('''
+                        SELECT 1 FROM Video WHERE Video.hash = ?
+                        ''',(video_hash,))
+            self.conn.commit()
+            if cur.fetchone() is not None:
+                return True
+            else:
+                return False  
         except sqlite3.OperationalError as err:
             self.conn.rollback()
             raise err
+        finally:
+            cur.close()
     
 if __name__ == "__main__":
     MediaParserSqlHelper("./.develop_assets/media.db")
