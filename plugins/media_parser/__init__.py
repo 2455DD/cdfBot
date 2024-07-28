@@ -12,6 +12,8 @@ import imagehash
 import videohash
 import shutil
 from .media_sql_helper import MediaParserSqlHelper
+from pathlib import Path
+
 logger = get_logger()
 
 class MediaParserConfig(ConfigModel):
@@ -29,9 +31,17 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
     """
     priority = 2
     def __init_state__(self) -> sqlite3.Connection | None:
-        if not os.path.exists(self.config.db_path):
-            logger.error("数据库无法打开，跳过链接")
-            return
+        db_path = Path(self.config.db_path)
+        try:
+            if not db_path.parent.exists():
+                logger.warning(f"媒体数据库父目录{db_path.parent.absolute()}不存在，尝试创建")
+                db_path.parent.mkdir(parents=True)
+            if not db_path.exists():
+                logger.warning(f"媒体数据库{db_path}不存在，尝试创建")
+                db_path.open("w").close()
+        except OSError as err:
+            logger.error(err)
+            return None
         else:    
             return MediaParserSqlHelper(self.config.db_path)
     
