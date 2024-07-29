@@ -1,6 +1,6 @@
 from PIL import Image,UnidentifiedImageError
 import imagehash
-from media_sql_helper import MediaParserSqlHelper
+from plugins.media_parser.media_sql_helper import MediaParserSqlHelper
 from pathlib import Path
 import videohash
 
@@ -25,7 +25,8 @@ if img_path:
             hash = str(orginal_hash)
 
             name = img.name
-            
+            if helper.is_image_exists(hash):
+                print("[INFO] {1}数据库中存在，跳过")
             helper.insert_image(name,hash,str(img))
         except UnidentifiedImageError as err:
             print(f"Error: {img} 打不开，删除该文件")
@@ -39,5 +40,6 @@ for video in video_path.glob("**/*"):
     hash = str(videohash.VideoHash(path = str(video)))
 
     name = video.name
-    
+    if helper.is_video_exists(hash):
+        print("[INFO] {1}数据库中存在，跳过")    
     helper.insert_video(name,hash,str(video))    
