@@ -99,7 +99,6 @@ class MediaParserSqlHelper():
                         VALUES (?,?,?)
                         ''',(image_name,image_path,image_hash))
             self.conn.commit()
-            logger.debug("成功插入")
         except sqlite3.OperationalError as err:
             self.conn.rollback()
             raise err
@@ -123,7 +122,6 @@ class MediaParserSqlHelper():
     #---------------- Query ------------------------
   
     def is_image_exists(self,image_hash:str)->bool:
-        logger.debug("成功查询")
         try:
             cur = self.conn.cursor()
             cur.execute('''
@@ -159,7 +157,6 @@ class MediaParserSqlHelper():
             cur.close()
             
     def get_image_path_by_hash(self,image_hash:str)->str:
-        logger.debug("成功查询")
         try:
             cur = self.conn.cursor()
             cur.execute('''

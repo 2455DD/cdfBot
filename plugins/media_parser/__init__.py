@@ -77,6 +77,7 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                 await self._save_file(file_path,url)
                 
             elif seg.type == "video":
+                logger.debug(seg)
                 url = seg["url"]
                 await self._save_file(file_path,url)
             elif seg.type == "file":
@@ -127,7 +128,7 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                                                         ,id=forward_msg[0].get("id"))
         
         node_segs:List[CQHTTPMessageSegment] = list()
-        
+        logger.debug("成功解析合并转发消息")
         for node in raw_forward_msgs["messages"]: # 结点列表中不同节点
             for node_msg_txt in node["content"]:
                 match node_msg_txt["type"]:
