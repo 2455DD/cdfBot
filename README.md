@@ -13,5 +13,5 @@
 
 ## 使用
 
-1. 配置CQHTTP（反向Websocket链接，监听地址为`ws://127.0.0.1:8080`,endpoint:`/cqhttp/ws`）
+1. 配置CQHTTP（反向Websocket链接，监听地址为`ws://127.0.0.1:8080/cqhttp/ws`）
 2. etc
