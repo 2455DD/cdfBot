@@ -77,9 +77,11 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                 await self._save_file(file_path,url)
                 
             elif seg.type == "video":
-                logger.debug(seg)
-                url = seg["url"]
-                await self._save_file(file_path,url)
+                url:str = seg["url"]
+                if url.startswith("http"):
+                    await self._save_file(file_path,url)
+                else:
+                    result = self.event.adapter.call_api("get_file",file_id=seg["file_id"])
             elif seg.type == "file":
                 raise NotImplementedError("文件形式的消息暂不允许") #TODO: 实现文件形式内容
             elif seg.type == "text":
@@ -148,6 +150,7 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                             },)
                     case "forward":
                         logger.debug(f"{forward_msg[0].get("id")}：递归解析合并{node_msg_txt["data"]["id"]}")
+                        logger.warning(f"根据协议端相关Issue#216，暂时先使用缓解手段")
                         temp_seg_node = CQHTTPMessage(CQHTTPMessageSegment(type="forward",
                                                              data={
                                                                  "id":str(node_msg_txt["data"]["id"])
