@@ -81,7 +81,11 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                 if url.startswith("http"):
                     await self._save_file(file_path,url)
                 else:
-                    result = self.event.adapter.call_api("get_file",file_id=seg["file_id"])
+                    if Path(url).is_file():
+                        file_path = url
+                    else:
+                        logger.warning("下载视频失败: 非法的URL")
+                        return
             elif seg.type == "file":
                 raise NotImplementedError("文件形式的消息暂不允许") #TODO: 实现文件形式内容
             elif seg.type == "text":
@@ -126,36 +130,33 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
         
     
     async def parse_forward_msgs(self,forward_msg:CQHTTPMessage) ->  List[CQHTTPMessageSegment]:
-        raw_forward_msgs:List[CQHTTPMessage] = await self.event.adapter.call_api("get_forward_msg"
-                                                        ,id=forward_msg[0].get("id"))
-        
+        # raw_forward_msgs:List[CQHTTPMessage] = await self.event.adapter.call_api("get_forward_msg"
+        #                                                 ,id=forward_msg[0].get("id"))
         node_segs:List[CQHTTPMessageSegment] = list()
         logger.debug("成功解析合并转发消息")
-        for node in raw_forward_msgs["messages"]: # 结点列表中不同节点
-            for node_msg_txt in node["content"]:
-                match node_msg_txt["type"]:
+        for node in forward_msg[0]["content"]: # 结点列表中不同节点
+            nodes = node["message"]
+            for node in nodes:
+                match node["type"]:
                     case "image":
                         node_segs += CQHTTPMessageSegment(type="image",
                             data={
-                                "file": node_msg_txt["data"]["file"],
-                                "url": node_msg_txt["data"]["url"],
+                                "file": node["data"]["file_unique"],
+                                "url": node["data"]["url"],
                                 "type": None,
                             },)
                     case "video":
                         node_segs += CQHTTPMessageSegment(type="video",
                             data={
-                                "file": node_msg_txt["data"]["file"],
-                                "url": node_msg_txt["data"]["url"],
-                                "type": None,
-                            },)
+                                "file": node["data"]["file_unique"],
+                                "url": node["data"]["url"],
+                                "file_id":node["data"]["file_id"],
+                                "type": None,}
+                            )
                     case "forward":
-                        logger.debug(f"{forward_msg[0].get("id")}：递归解析合并{node_msg_txt["data"]["id"]}")
+                        logger.debug(f"{forward_msg[0].get("id")}：递归解析合并{node["data"]["id"]}")
                         logger.warning(f"根据协议端相关Issue#216，暂时先使用缓解手段")
-                        temp_seg_node = CQHTTPMessage(CQHTTPMessageSegment(type="forward",
-                                                             data={
-                                                                 "id":str(node_msg_txt["data"]["id"])
-                                                             }
-                                                    ))
+                        temp_seg_node = CQHTTPMessage()
                         
                         node_segs.extend(await self.parse_forward_msgs(temp_seg_node))
         
