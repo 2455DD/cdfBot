@@ -134,6 +134,9 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
         #                                                 ,id=forward_msg[0].get("id"))
         node_segs:List[CQHTTPMessageSegment] = list()
         logger.debug("成功解析合并转发消息")
+        if len(forward_msg)>1:
+            raise NotImplementedError()
+        
         for node in forward_msg[0]["content"]: # 结点列表中不同节点
             nodes = node["message"]
             for node in nodes:
@@ -156,9 +159,9 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                     case "forward":
                         logger.debug(f"{forward_msg[0].get("id")}：递归解析合并{node["data"]["id"]}")
                         logger.warning(f"根据协议端相关Issue#216，暂时先使用缓解手段")
-                        temp_seg_node = CQHTTPMessage()
                         
-                        node_segs.extend(await self.parse_forward_msgs(temp_seg_node))
+                        message = node["data"]
+                        node_segs.extend(await self.parse_forward_msgs([message]))
         
         return node_segs
     
