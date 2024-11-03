@@ -2,7 +2,7 @@ import os
 from alicebot import Plugin,ConfigModel
 from alicebot.event import MessageEvent
 from alicebot.adapter.cqhttp import CQHTTPMessage,CQHTTPMessageSegment
-from typing import List,Union
+from typing import Dict, List,Union
 from structlog.stdlib import get_logger
 import sqlite3
 import httpx
@@ -10,9 +10,9 @@ import aiofiles
 from PIL import Image
 import imagehash
 import videohash
-import shutil
-from .media_sql_helper import MediaParserSqlHelper
+from datetime import datetime
 from pathlib import Path
+from .media_sql_helper import MediaParserSqlHelper
 
 logger = get_logger()
 
@@ -20,6 +20,14 @@ class MediaParserConfig(ConfigModel):
     __config_name__ = "media_parser"
     db_path:str = "db/media.db"
     download_root_path:str = "assets/downloads"
+
+media_type_chinese:Dict[str,str] = {
+    "image":"图片",
+    "video":"视频",
+    "file":"文件",
+    "text":"文本"
+}
+    
 
 class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
     """MediaParser
@@ -64,13 +72,17 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                     async for chuck in resp.aiter_bytes():
                             await f.write(chuck)        
             
-    async def _handle_multimedia_segment(self,seg:CQHTTPMessageSegment):
-        file_path = f"{self.config.download_root_path}/{seg.type}/{seg['file']}"
+    async def _handle_multimedia_segment(self,seg:CQHTTPMessageSegment,under_forward:bool=False):
+        if under_forward:
+            root_path = self.config.download_root_path + "/" + "forward_" + datetime.now().strftime("%Y%m%d-%H%M%S")
+            file_path = f"{root_path}/{seg.type}/{seg['file']}"
+        else:
+            file_path = f"{self.config.download_root_path}/{seg.type}/{seg['file']}"
+        
         
         if not os.path.exists(self.config.download_root_path):
             os.makedirs(self.config.download_root_path)
         
-        # TODO: 数据库处理
         try:
             if seg.type == "image":
                 url = seg["url"]
@@ -142,9 +154,12 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
             for node in nodes:
                 match node["type"]:
                     case "image":
+                        file_name:str = node["data"]["file_unique"]
+                        if not file_name.endswith((".jpg",".png",".tiff",".webp")):
+                            file_name = file_name +  ".jpg"
                         node_segs += CQHTTPMessageSegment(type="image",
                             data={
-                                "file": node["data"]["file_unique"],
+                                "file": file_name,
                                 "url": node["data"]["url"],
                                 "type": None,
                             },)
@@ -168,12 +183,21 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
     async def handle(self) -> None:
         if self.event.message[0].type == "forward":
             segs = await self.parse_forward_msgs(self.event.message)
-            for seg in segs:
+            root_path = self.config.download_root_path + "/" + "forward_" + datetime.now().strftime("%Y%m%d-%H%M%S")
+            logger.info("从{}接收到待存储多媒体消息{}条，开始处理".format(
+                self.event.get_sender_id(),
+                len(segs)
+            ))
+            for i,seg in enumerate(segs):
+                logger.info("当前处理类型{} ({}/{})".format(media_type_chinese[seg.type],i+1,len(segs)))
                 try:
                     await self._handle_multimedia_segment(seg)
                 except NotImplementedError:
                     logger.warn(f"处理{seg.type}类别方法仍未实现")
         else:
+            logger.info("从{}接收到待存储多媒体消息1条，开始处理".format(
+                self.event.get_sender_id(),
+            ))
             for node_seg in self.event.message:
                     try:
                         await self._handle_multimedia_segment(node_seg)
