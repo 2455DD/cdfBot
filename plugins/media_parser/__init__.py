@@ -13,7 +13,7 @@ import videohash
 from datetime import datetime
 from pathlib import Path
 from .media_sql_helper import MediaParserSqlHelper
-
+from ._errors import MediaDuplicatedError
 logger = get_logger()
 
 class MediaParserConfig(ConfigModel):
@@ -117,7 +117,7 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                 hash = str(orginal_hash)
                 if self.state.is_image_exists(hash):
                     if Path(self.state.get_image_path_by_hash(hash)).exists():
-                        logger.info(f"图片{seg['file']}存在重复，当前不会自动删除，请手动删除")
+                        raise MediaDuplicatedError(media_type_chinese[seg.type],seg["file"])
                     else:
                         self.state.delete_image_record(hash)
                         self.state.insert_image(seg["file"],hash,file_path)
@@ -127,7 +127,7 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                 hash = str(videohash.VideoHash(path = file_path)) #TODO
                 if self.state.is_video_exists(hash):
                     if Path(self.state.get_video_path_by_hash(hash)):
-                        logger.info(f"视频{seg['file']}存在重复，当前不会自动删除，请手动删除")
+                        raise MediaDuplicatedError(media_type_chinese[seg.type],seg["file"])
                     else:
                         self.state.delete_image_record(hash)
                         self.state.insert_video(seg["file"],hash,file_path)
@@ -183,6 +183,7 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
     async def handle(self) -> None:
         if self.event.message[0].type == "forward":
             segs = await self.parse_forward_msgs(self.event.message)
+            err_count = 0
             root_path = self.config.download_root_path + "/" + "forward_" + datetime.now().strftime("%Y%m%d-%H%M%S")
             logger.info("从{}接收到待存储多媒体消息{}条，开始处理".format(
                 self.event.get_sender_id(),
@@ -194,18 +195,42 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                     await self._handle_multimedia_segment(seg)
                 except NotImplementedError:
                     logger.warn(f"处理{seg.type}类别方法仍未实现")
+                    err_count += 1
+                except httpx.HTTPStatusError as err:
+                    logger.error("下载中出现网络问题: {}".format(err))
+                    await self.event.reply("出现网络错误： {}".format(err))
+                    err_count += 1
+                except MediaDuplicatedError as err:
+                    logger.info(str(err)+"，跳过该条")
+                    err_count += 1
+                except Exception as err:
+                    logger.error("未捕获错误,{}".format(err))
+                    await self.event.reply("出现严重错误： {}".format(err))
+                    err_count +=1        
+            await self.event.reply(f"下载已完成，有消息{len(segs)}条，出现错误{err_count}条")
+                    
         else:
             logger.info("从{}接收到待存储多媒体消息1条，开始处理".format(
                 self.event.get_sender_id(),
             ))
-            for node_seg in self.event.message:
+            err_count=0
+            for i,node_seg in enumerate(self.event.message):
                     try:
                         await self._handle_multimedia_segment(node_seg)
                     except NotImplementedError:
                         logger.warn("方法未实现")
+                    except httpx.HTTPStatusError as err:
+                        logger.error("下载中出现网络问题: {}".format(err))
+                        await self.event.reply("出现网络错误： {}".format(err))
+                        err_count += 1
+                    except MediaDuplicatedError as err:
+                        logger.info(str(err)+"，跳过该条")
+                        err_count += 1
                     except Exception as e:
                         logger.error(f"{node_seg["file"]}出现错误，跳过\n{e}")
-        
+                        err_count+=1
+                        await self.event.reply(f"下载文件中({i}/{len(self.event.message)})出现错误")
+            await self.event.reply(f"下载已完成，有消息{len(self.event.message)}条，出现错误{err_count}条")
 
     async def rule(self) -> bool:
         if self.event.adapter.name != 'cqhttp' or self.event.type != "message":
