@@ -154,7 +154,10 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
             for node in nodes:
                 match node["type"]:
                     case "image":
-                        file_name:str = node["data"]["file_unique"]
+                        if "file_unique" in node["data"]:
+                            file_name:str = node["data"]["file_unique"]
+                        else:
+                            file_name:str = node["data"]["file"]
                         if not file_name.endswith((".jpg",".png",".tiff",".webp")):
                             file_name = file_name +  ".jpg"
                         node_segs += CQHTTPMessageSegment(type="image",
@@ -166,7 +169,7 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                     case "video":
                         node_segs += CQHTTPMessageSegment(type="video",
                             data={
-                                "file": node["data"]["file_unique"],
+                                "file": node["data"]["file_unique"] if "file_unique" in node["data"] else node["data"]["file"],
                                 "url": node["data"]["url"],
                                 "file_id":node["data"]["file_id"],
                                 "type": None,}
