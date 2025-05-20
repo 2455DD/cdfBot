@@ -1,3 +1,4 @@
+"""CdfBot 入口"""
 from alicebot import Bot
 
 bot = Bot(hot_reload=True)
