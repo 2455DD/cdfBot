@@ -6,11 +6,12 @@ from structlog.stdlib import get_logger
 logger = get_logger()
 
 class MediaParserSqlHelper():
-    def __init__(self,db_path:str) -> None:
-        assert Path(db_path).parent.exists(),"媒体数据库父目录不存在"
-        assert not Path(db_path).is_dir(),"媒体数据库路径是目录"
-        
-        self.db_path = Path(db_path)
+    def __init__(self,db_path:str|Path) -> None:
+        if isinstance(db_path,str):
+            db_path = Path(db_path) 
+        assert db_path.parent.exists(),"媒体数据库父目录不存在"
+        assert not db_path.is_dir(),"媒体数据库路径是目录"
+        self.db_path:Path = db_path
         self.init_db()
         
     def init_db(self):
