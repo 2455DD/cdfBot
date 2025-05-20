@@ -134,7 +134,7 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
                 else:
                     self.state.insert_image(seg["file"], media_hash, file_path)
             case "video":
-                media_hash = str(videohash.VideoHash(path=file_path))  # TODO
+                media_hash = str(videohash.VideoHash(path=file_path))
                 if self.state.is_video_exists(media_hash):
                     if Path(self.state.get_video_path_by_hash(media_hash)):
                         raise MediaDuplicatedError(
