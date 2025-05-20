@@ -1,35 +1,37 @@
+"""该模块实现了MediaParser，解析QQ消息的模块类"""
+
+from collections import defaultdict
 import os
-from alicebot import Plugin,ConfigModel
-from alicebot.event import MessageEvent
-from alicebot.adapter.cqhttp import CQHTTPMessage,CQHTTPMessageSegment
-from typing import Dict, List,Union
-from structlog.stdlib import get_logger
-import sqlite3
-import httpx
-import aiofiles
-from PIL import Image
-import imagehash
-import videohash
 from datetime import datetime
 from pathlib import Path
-from .media_sql_helper import MediaParserSqlHelper
+from typing import Dict, List
+
+import aiofiles
+import httpx
+import imagehash
+import videohash  # type: ignore
+from alicebot import Plugin
+from alicebot.adapter.cqhttp import CQHTTPMessage, CQHTTPMessageSegment
+from alicebot.adapter.cqhttp.event import MessageEvent
+# from alicebot.event import MessageEvent
+from PIL import Image
+from structlog.stdlib import get_logger
+
 from ._errors import MediaDuplicatedError
+from .media_sql_helper import MediaParserSqlHelper
+from .media_parser_config import MediaParserConfig
+
 logger = get_logger()
 
-class MediaParserConfig(ConfigModel):
-    __config_name__ = "media_parser"
-    db_path:str = "db/media.db"
-    download_root_path:str = "assets/downloads"
-
-media_type_chinese:Dict[str,str] = {
-    "image":"图片",
-    "video":"视频",
-    "file":"文件",
-    "text":"文本"
+MEDIA_TYPE_TRANSLATION: Dict[str, str] = {
+    "image": "图片",
+    "video": "视频",
+    "file": "文件",
+    "text": "文本"
 }
-    
 
-class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
+
+class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig]):
     """MediaParser
 
     解析并存储视频和图片
@@ -38,60 +40,66 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
         Plugin (_type_): _description_
     """
     priority = 2
-    def __init_state__(self) -> sqlite3.Connection | None:
+
+    def __init_state__(self) -> MediaParserSqlHelper | None:
         db_path = Path(self.config.db_path)
         try:
             if not db_path.parent.exists():
                 logger.warning(f"媒体数据库父目录{db_path.parent.absolute()}不存在，尝试创建")
                 db_path.parent.mkdir(parents=True)
-            if not db_path.exists():
+            if not db_path.is_file():
                 logger.warning(f"媒体数据库{db_path}不存在，尝试创建")
-                db_path.open("w").close()
+                db_path.open("w", encoding="utf-8").close()
         except OSError as err:
-            logger.error(err)
+            logger.error("创建数据库时发生错误", err_msg=err)
             return None
-        else:    
+        else:
             return MediaParserSqlHelper(self.config.db_path)
-    
-    async def _save_metadata_to_db(self,path:str,type:str):
-        assert os.path.exists(path)
-        match type:
-            case "image":
-                image_hash = str(imagehash.crop_resistant_hash(Image.open(path), min_segment_size=500, segmentation_image_size=1000))
-                pass
-            case "video":
-                pass
-            case "_":
-                raise ValueError(f"{type} 不被支持")
-    
-    async def _save_file(self,path:str,url:str):
-        async with aiofiles.open(path,mode="wb") as f:        
+
+    # async def _save_metadata_to_db(self,path:str,seg_type:str):
+    #     assert os.path.exists(path)
+    #     match seg_type:
+    #         case "image":
+    #             image_hash = str(imagehash.crop_resistant_hash(Image.open(path),
+    #                                                            min_segment_size=500,
+    #                                                            segmentation_image_size=1000
+    #                             ))
+    #         case "video":
+    #             pass
+    #         case "_":
+    #             raise ValueError(f"{seg_type} 不被支持")
+
+    async def _save_file(self, path: str, url: str):
+        async with aiofiles.open(path, mode="wb") as f:
             async with httpx.AsyncClient() as client:
-                async with client.stream("get",url) as resp:
+                async with client.stream("get", url) as resp:
                     resp.raise_for_status()
                     async for chuck in resp.aiter_bytes():
-                            await f.write(chuck)        
-            
-    async def _handle_multimedia_segment(self,seg:CQHTTPMessageSegment,under_forward:bool=False):
+                        await f.write(chuck)
+
+    async def _handle_multimedia_segment(self,
+                                         seg: CQHTTPMessageSegment,
+                                         under_forward: bool = False):
+        file_path: str = ""
         if under_forward:
-            root_path = self.config.download_root_path + "/" + "forward_" + datetime.now().strftime("%Y%m%d-%H%M%S")
-            file_path = f"{root_path}/{seg.type}/{seg['file']}"
+            root_path: Path = self.config.download_root_path / \
+                f"forward_{datetime.now().strftime("%Y%m%d-%H%M%S")}"
+            file_path = str((root_path/seg.type/seg['file']).absolute())
         else:
-            file_path = f"{self.config.download_root_path}/{seg.type}/{seg['file']}"
-        
-        
+            file_path = str((self.config.download_root_path /
+                            seg.type/seg['file']).absolute())
+
         if not os.path.exists(self.config.download_root_path):
             os.makedirs(self.config.download_root_path)
-        
+
+        url: str = seg["url"] if "url" in seg else ""
         try:
             if seg.type == "image":
-                url = seg["url"]
-                await self._save_file(file_path,url)
-                
+                await self._save_file(file_path, url)
+
             elif seg.type == "video":
-                url:str = seg["url"]
                 if url.startswith("http"):
-                    await self._save_file(file_path,url)
+                    await self._save_file(file_path, url)
                 else:
                     if Path(url).is_file():
                         file_path = url
@@ -99,7 +107,7 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
                         logger.warning("下载视频失败: 非法的URL")
                         return
             elif seg.type == "file":
-                raise NotImplementedError("文件形式的消息暂不允许") #TODO: 实现文件形式内容
+                raise NotImplementedError("文件形式的消息暂不允许")  # TODO: 实现文件形式内容
             elif seg.type == "text":
                 return
             else:
@@ -107,140 +115,155 @@ class MediaParser(Plugin[MessageEvent,MediaParserSqlHelper,MediaParserConfig]):
         except httpx.HTTPStatusError as e:
             logger.error(f"{seg['file']} 无法访问：{seg['url']} \n{e}")
             return
-        except Exception as e:
-            logger.error(f"{seg['file']} 出错： \n{e}")
-            return
-          
+        # except Exception as e:
+        #     logger.error(f"{seg['file']} 出错： \n{e}")
+        #     return
+        media_hash: str | None = None
         match seg.type:
             case "image":
                 orginal_hash = imagehash.whash(Image.open(file_path))
-                hash = str(orginal_hash)
-                if self.state.is_image_exists(hash):
-                    if Path(self.state.get_image_path_by_hash(hash)).exists():
-                        raise MediaDuplicatedError(media_type_chinese[seg.type],seg["file"])
+                media_hash = str(orginal_hash)
+                if self.state.is_image_exists(media_hash):
+                    if Path(self.state.get_image_path_by_hash(media_hash)).exists():
+                        raise MediaDuplicatedError(
+                            MEDIA_TYPE_TRANSLATION[seg.type], seg["file"])
                     else:
-                        self.state.delete_image_record(hash)
-                        self.state.insert_image(seg["file"],hash,file_path)
+                        self.state.delete_image_record(media_hash)
+                        self.state.insert_image(
+                            seg["file"], media_hash, file_path)
                 else:
-                    self.state.insert_image(seg["file"],hash,file_path)
+                    self.state.insert_image(seg["file"], media_hash, file_path)
             case "video":
-                hash = str(videohash.VideoHash(path = file_path)) #TODO
-                if self.state.is_video_exists(hash):
-                    if Path(self.state.get_video_path_by_hash(hash)):
-                        raise MediaDuplicatedError(media_type_chinese[seg.type],seg["file"])
+                media_hash = str(videohash.VideoHash(path=file_path))  # TODO
+                if self.state.is_video_exists(media_hash):
+                    if Path(self.state.get_video_path_by_hash(media_hash)):
+                        raise MediaDuplicatedError(
+                            MEDIA_TYPE_TRANSLATION[seg.type], seg["file"])
                     else:
-                        self.state.delete_image_record(hash)
-                        self.state.insert_video(seg["file"],hash,file_path)
+                        self.state.delete_image_record(media_hash)
+                        self.state.insert_video(
+                            seg["file"], media_hash, file_path)
                 else:
-                    self.state.insert_video(seg["file"],hash,file_path)
+                    self.state.insert_video(seg["file"], media_hash, file_path)
             case "file":
-                hash = None #TODO: 实现文件形式内容
+                media_hash = None  # TODO: 实现文件形式内容
             case "_":
                 raise ValueError(f"{type} 不被支持")
 
-        logger.debug(f"{seg.type}: \t{hash}")
-        
-    
-    async def parse_forward_msgs(self,forward_msg:CQHTTPMessage) ->  List[CQHTTPMessageSegment]:
-        # raw_forward_msgs:List[CQHTTPMessage] = await self.event.adapter.call_api("get_forward_msg"
-        #                                                 ,id=forward_msg[0].get("id"))
-        node_segs:List[CQHTTPMessageSegment] = list()
-        logger.debug("成功解析合并转发消息")
-        if len(forward_msg)>1:
-            raise NotImplementedError()
-        
-        for node in forward_msg[0]["content"]: # 结点列表中不同节点
+        logger.debug(f"{seg.type}: \t{media_hash}")
+
+    async def _check_reply_message(self, seg: CQHTTPMessageSegment):
+        pass
+
+    async def flatten_forward_msgs(self, forward_msg: CQHTTPMessage) -> CQHTTPMessage:
+        """递归将Forward消息解析为展平消息
+
+        Args:
+            forward_msg (CQHTTPMessage): 原始转发消息
+
+        Raises:
+            NotImplementedError: 未理解Forward消息的长度大于1
+
+        Returns:
+            CQHTTPMessage: 已展平消息
+        """
+        node_segs: CQHTTPMessage = CQHTTPMessage()
+        if len(forward_msg) > 1:
+            raise NotImplementedError("Forward消息的长度大于1")
+        file_name: str = ""
+        for node in forward_msg[0]["content"]:  # 结点列表中不同节点
             nodes = node["message"]
             for node in nodes:
                 match node["type"]:
                     case "image":
                         if "file_unique" in node["data"]:
-                            file_name:str = node["data"]["file_unique"]
+                            file_name = node["data"]["file_unique"]
                         else:
-                            file_name:str = node["data"]["file"]
-                        if not file_name.endswith((".jpg",".png",".tiff",".webp")):
-                            file_name = file_name +  ".jpg"
-                        node_segs += CQHTTPMessageSegment(type="image",
-                            data={
-                                "file": file_name,
-                                "url": node["data"]["url"],
-                                "type": None,
-                            },)
+                            file_name = node["data"]["file"]
+                        if not file_name.endswith((".jpg", ".png", ".tiff", ".webp")):
+                            file_name = file_name + ".jpg"
+                        node_segs.append(CQHTTPMessageSegment(type="image",
+                                                              data={
+                                                                  "file": file_name,
+                                                                  "url": node["data"]["url"],
+                                                                  "type": None,
+                                                              },))
                     case "video":
-                        node_segs += CQHTTPMessageSegment(type="video",
-                            data={
-                                "file": node["data"]["file_unique"] if "file_unique" in node["data"] else node["data"]["file"],
-                                "url": node["data"]["url"],
-                                "file_id":node["data"]["file_id"],
-                                "type": None,}
-                            )
+                        if "file_unique" in node["data"]:
+                            file_name = node["data"]["file_unique"]
+                        else:
+                            file_name = node["data"]["file"]
+                        node_segs += [CQHTTPMessageSegment(type="video",
+                                    data={
+                                        "file":file_name,
+                                        "url": node["data"]["url"],
+                                        "type": None, }
+                                    )]
                     case "forward":
-                        logger.debug(f"{forward_msg[0].get("id")}：递归解析合并{node["data"]["id"]}")
-                        logger.warning(f"根据协议端相关Issue#216，暂时先使用缓解手段")
-                        
-                        message = node["data"]
-                        node_segs.extend(await self.parse_forward_msgs([message]))
-        
+                        logger.debug(
+                            f"解析{forward_msg[0].get("id")}中：递归解析合并{node["data"]["id"]}")
+                        node_segs.extend(await self.flatten_forward_msgs(CQHTTPMessage(node)))
+                    case "reply":
+                        logger.error(
+                            f"解析{forward_msg[0].get("id")}中：转发消息中包含回复消息,不支持")
+                        # logger.debug(f"解析{forward_msg[0].get("id")}：回复信息")
+                        # reply_msg_id = node["data"]["id"]
+                        # await self.event.adapter.call_api("get_msg",message_id=reply_msg_id)
         return node_segs
-    
+
     async def handle(self) -> None:
+        self.event: MessageEvent
         if self.event.message[0].type == "forward":
-            segs = await self.parse_forward_msgs(self.event.message)
-            err_count = 0
-            root_path = self.config.download_root_path + "/" + "forward_" + datetime.now().strftime("%Y%m%d-%H%M%S")
-            logger.info("从{}接收到待存储多媒体消息{}条，开始处理".format(
-                self.event.get_sender_id(),
-                len(segs)
-            ))
-            for i,seg in enumerate(segs):
-                logger.info("当前处理类型{} ({}/{})".format(media_type_chinese[seg.type],i+1,len(segs)))
-                try:
-                    await self._handle_multimedia_segment(seg)
-                except NotImplementedError:
-                    logger.warn(f"处理{seg.type}类别方法仍未实现")
-                    err_count += 1
-                except httpx.HTTPStatusError as err:
-                    logger.error("下载中出现网络问题: {}".format(err))
-                    await self.event.reply("出现网络错误： {}".format(err))
-                    err_count += 1
-                except MediaDuplicatedError as err:
-                    logger.info(str(err)+"，跳过该条")
-                    err_count += 1
-                except Exception as err:
-                    logger.error("未捕获错误,{}".format(err))
-                    await self.event.reply("出现严重错误： {}".format(err))
-                    err_count +=1        
-            await self.event.reply(f"下载已完成，有消息{len(segs)}条，出现错误{err_count}条")
-                    
+            segs = await self.flatten_forward_msgs(self.event.message)
+            logger.info(
+                f"从{self.event.get_sender_id()}接收到待存储多媒体消息{len(segs)}条，开始处理")
         else:
-            logger.info("从{}接收到待存储多媒体消息1条，开始处理".format(
-                self.event.get_sender_id(),
-            ))
-            err_count=0
-            for i,node_seg in enumerate(self.event.message):
-                    try:
-                        await self._handle_multimedia_segment(node_seg)
-                    except NotImplementedError:
-                        logger.warn("方法未实现")
-                    except httpx.HTTPStatusError as err:
-                        logger.error("下载中出现网络问题: {}".format(err))
-                        await self.event.reply("出现网络错误： {}".format(err))
-                        err_count += 1
-                    except MediaDuplicatedError as err:
-                        logger.info(str(err)+"，跳过该条")
-                        err_count += 1
-                    except Exception as e:
-                        logger.error(f"{node_seg["file"]}出现错误，跳过\n{e}")
-                        err_count+=1
-                        await self.event.reply(f"下载文件中({i}/{len(self.event.message)})出现错误")
-            await self.event.reply(f"下载已完成，有消息{len(self.event.message)}条，出现错误{err_count}条")
+            segs = self.event.message
+            logger.info(f"从{self.event.get_sender_id()}接收到待存储多媒体消息1条，开始处理")
+        err_counts_dict: Dict[str, List[str]] = defaultdict(list)
+        err_count = 0
+        for i, seg in enumerate(segs):
+            logger.info(
+                f"当前处理类型{MEDIA_TYPE_TRANSLATION[seg.type]} ({i+1}/{len(segs)})")
+            try:
+                await self._handle_multimedia_segment(seg)
+            except NotImplementedError:
+                logger.warn(f"处理{seg.type}类别方法仍未实现")
+                err_counts_dict["类别未实现"].append(f"第{i}条: 类型{seg['file']}")
+                err_count += 1
+            except httpx.HTTPStatusError as err:
+                logger.error(f"下载中出现网络问题: {err}")
+                await self.event.reply(f"出现网络错误：\n {err}")
+                err_counts_dict["网络问题"].append(f"第{i}条: {err}")
+                err_count += 1
+            except MediaDuplicatedError as err:
+                logger.info(str(err)+"，跳过该条")
+                err_counts_dict["文件重复"].append(f"第{i}条: {err}")
+                err_count += 1
+            except Exception as err:
+                logger.exception(f"未捕获错误,{err}")
+                await self.event.reply(f"出现严重错误： {err}")
+                err_counts_dict["未捕获错误"].append(
+                    f"第{i}条: 错误类型{type(err)} {err}")
+                err_count += 1
+        if err_count > 0:
+            reply_msg = f"下载已完成，有消息{len(segs)}，出现错误：\n"
+            err_idx: int = 0
+            for err_type, err_list in err_counts_dict.items():
+                reply_msg += f"{chr(ord('A')+err_idx)}. {err_type}:\n"
+                err_idx += 1
+                for err_msg in err_list:
+                    reply_msg += f"\t{err_msg}\n"
+            await self.event.reply(reply_msg)
+        else:
+            await self.event.reply(f"下载已完成，有消息{len(segs)}条，全部成功")
 
     async def rule(self) -> bool:
         if self.event.adapter.name != 'cqhttp' or self.event.type != "message":
             return False
-        
+
         for seg in self.event.message:
-            if seg.type in ["image","video","file","forward"]:
+            if seg.type in ["image", "video", "file", "forward"]:
                 return True
-            
+
         return False
