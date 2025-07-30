@@ -8,6 +8,7 @@ authors = [
 dependencies = [
     "alicebot>=0.10.0",
     "httpx>=0.27.0",
+    "boto3>=1.39.16",
 ]
 requires-python = "==3.12.*"
 readme = "README.md"
