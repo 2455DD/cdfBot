@@ -14,6 +14,7 @@ class MediaParserConfig(ConfigModel):
     download_root_path: Path = Path("assets/downloads")
 
     enable_s3: bool = False
-    s3_endpoint: URL = URL("s3.eu-central-1.s4.mega.io")
+    s3_bucket: str = "qq-bot-bucket"
+    s3_endpoint: str = "s3.eu-central-1.s4.mega.io"
     s3_access_key: str = None
     s3_secret_key: str = None

@@ -4,9 +4,10 @@ from collections import defaultdict
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import aiofiles
+from botocore.client import BaseClient
 import httpx
 import imagehash
 import videohash  # type: ignore
@@ -20,6 +21,8 @@ from structlog.stdlib import get_logger
 from ._errors import MediaDuplicatedError
 from .media_sql_helper import MediaParserSqlHelper
 from .media_parser_config import MediaParserConfig
+from ._s3_updater import S3Uploader
+
 
 logger = get_logger()
 
@@ -54,7 +57,8 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
             logger.error("创建数据库时发生错误", err_msg=err)
             return None
         else:
-            return MediaParserSqlHelper(self.config.db_path)
+            helper = MediaParserSqlHelper(self.config.db_path)
+            return helper
 
     # async def _save_metadata_to_db(self,path:str,seg_type:str):
     #     assert os.path.exists(path)
@@ -76,6 +80,10 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
                     resp.raise_for_status()
                     async for chuck in resp.aiter_bytes():
                         await f.write(chuck)
+
+        name = Path(path).name
+        if self.uploader is not None:
+            await self.uploader.async_upload_file(path, f"qq-image/{name}")
 
     async def _handle_multimedia_segment(self,
                                          seg: CQHTTPMessageSegment,
@@ -194,11 +202,11 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
                         else:
                             file_name = node["data"]["file"]
                         node_segs += [CQHTTPMessageSegment(type="video",
-                                    data={
-                                        "file":file_name,
-                                        "url": node["data"]["url"],
-                                        "type": None, }
-                                    )]
+                                                           data={
+                                                               "file": file_name,
+                                                               "url": node["data"]["url"],
+                                                               "type": None, }
+                                                           )]
                     case "forward":
                         logger.debug(
                             f"解析{forward_msg[0].get("id")}中：递归解析合并{node["data"]["id"]}")
@@ -222,6 +230,16 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
             logger.info(f"从{self.event.get_sender_id()}接收到待存储多媒体消息1条，开始处理")
         err_counts_dict: Dict[str, List[str]] = defaultdict(list)
         err_count = 0
+
+        self.uploader: Optional[S3Uploader] = None
+        if self.config.enable_s3:
+            self.uploader = S3Uploader(
+                self.config.s3_endpoint,
+                self.config.s3_access_key,
+                self.config.s3_secret_key,
+                self.config.s3_bucket
+            )
+
         for i, seg in enumerate(segs):
             logger.info(
                 f"当前处理类型{MEDIA_TYPE_TRANSLATION[seg.type]} ({i+1}/{len(segs)})")

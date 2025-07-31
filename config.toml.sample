@@ -5,3 +5,8 @@ adapters = ["alicebot.adapter.cqhttp"]
 [plugin.media_parser]
 db_path = ""
 download_root_path = ""
+enable_s3 = True
+s3_endpoint = "..."
+s3_access_key = "..."
+s3_secret_key = "..."
+s3_bucket = "..."
