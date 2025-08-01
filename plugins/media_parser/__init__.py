@@ -73,7 +73,7 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
     #         case "_":
     #             raise ValueError(f"{seg_type} 不被支持")
 
-    async def _save_file(self, path: str, url: str):
+    async def _save_file(self, path: str, url: str, type: str):
         async with aiofiles.open(path, mode="wb") as f:
             async with httpx.AsyncClient() as client:
                 async with client.stream("get", url) as resp:
@@ -83,7 +83,7 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
 
         name = Path(path).name
         if self.uploader is not None:
-            await self.uploader.async_upload_file(path, f"qq-image/{name}")
+            await self.uploader.async_upload_file(path, f"qq-{type}/{name}")
 
     async def _handle_multimedia_segment(self,
                                          seg: CQHTTPMessageSegment,
@@ -103,11 +103,11 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
         url: str = seg["url"] if "url" in seg else ""
         try:
             if seg.type == "image":
-                await self._save_file(file_path, url)
+                await self._save_file(file_path, url, seg.type)
 
             elif seg.type == "video":
                 if url.startswith("http"):
-                    await self._save_file(file_path, url)
+                    await self._save_file(file_path, url, seg.type)
                 else:
                     if Path(url).is_file():
                         file_path = url
