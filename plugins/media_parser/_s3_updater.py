@@ -43,7 +43,7 @@ class S3Uploader:
         with local_path.open("rb") as f:
             self._client.upload_fileobj(f, self.bucket, s3_key)
 
-    async def async_upload_file(self, local_path: str, s3_key: str):
-        """Upload File in s3_key"""
-        loop = asyncio.get_running_loop()
-        await loop.run_in_executor(None, self.upload_file, Path(local_path), s3_key)
+    # async def async_upload_file(self, local_path: str, s3_key: str):
+    #     """Upload File in s3_key"""
+    #     loop = asyncio.get_running_loop()
+    #     await loop.run_in_executor(None, self.upload_file, Path(local_path), s3_key)

@@ -83,7 +83,8 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
 
         name = Path(path).name
         if self.uploader is not None:
-            await self.uploader.async_upload_file(path, f"qq-{type}/{name}")
+            self.uploader.upload_file(Path(path), f"qq-{type}/{name}")
+            # await self.uploader.async_upload_file(path, f"qq-{type}/{name}")
 
     async def _handle_multimedia_segment(self,
                                          seg: CQHTTPMessageSegment,
