@@ -62,19 +62,6 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
             helper = MediaParserSqlHelper(self.config.db_path)
             return helper
 
-    # async def _save_metadata_to_db(self,path:str,seg_type:str):
-    #     assert os.path.exists(path)
-    #     match seg_type:
-    #         case "image":
-    #             image_hash = str(imagehash.crop_resistant_hash(Image.open(path),
-    #                                                            min_segment_size=500,
-    #                                                            segmentation_image_size=1000
-    #                             ))
-    #         case "video":
-    #             pass
-    #         case "_":
-    #             raise ValueError(f"{seg_type} 不被支持")
-
     async def _save_file(self, path: str, url: str, type: str):
         async with aiofiles.open(path, mode="wb") as f:
             async with httpx.AsyncClient() as client:
@@ -126,9 +113,7 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
         except httpx.HTTPStatusError as e:
             logger.error(f"{seg['file']} 无法访问：{seg['url']} \n{e}")
             return
-        # except Exception as e:
-        #     logger.error(f"{seg['file']} 出错： \n{e}")
-        #     return
+
         media_hash: str | None = None
         match seg.type:
             case "image":
