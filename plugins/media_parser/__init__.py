@@ -11,7 +11,7 @@ from botocore.client import BaseClient
 import httpx
 import imagehash
 import videohash  # type: ignore
-from alicebot import Plugin
+from alicebot import Plugin,Depends
 from alicebot.adapter.cqhttp import CQHTTPMessage, CQHTTPMessageSegment
 from alicebot.adapter.cqhttp.event import MessageEvent
 # from alicebot.event import MessageEvent
@@ -20,7 +20,7 @@ from structlog.stdlib import get_logger
 
 from ._errors import MediaDuplicatedError
 from .media_sql_helper import MediaParserSqlHelper
-from .media_parser_config import MediaParserConfig
+from .config import MediaParserConfig
 from ._s3_updater import S3Uploader
 
 
@@ -43,6 +43,8 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
         Plugin (_type_): _description_
     """
     priority = 2
+    database:MediaParserSqlHelper = Depends(MediaParserSqlHelper,
+                                            )
 
     def __init_state__(self) -> MediaParserSqlHelper | None:
         db_path = Path(self.config.db_path)
