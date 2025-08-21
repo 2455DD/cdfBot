@@ -11,7 +11,7 @@ from botocore.client import BaseClient
 import httpx
 import imagehash
 import videohash  # type: ignore
-from alicebot import Plugin,Depends
+from alicebot import Plugin, Depends
 from alicebot.adapter.cqhttp import CQHTTPMessage, CQHTTPMessageSegment
 from alicebot.adapter.cqhttp.event import MessageEvent
 # from alicebot.event import MessageEvent
@@ -43,8 +43,6 @@ class MediaParser(Plugin[MessageEvent, MediaParserSqlHelper, MediaParserConfig])
         Plugin (_type_): _description_
     """
     priority = 2
-    database:MediaParserSqlHelper = Depends(MediaParserSqlHelper,
-                                            )
 
     def __init_state__(self) -> MediaParserSqlHelper | None:
         db_path = Path(self.config.db_path)
